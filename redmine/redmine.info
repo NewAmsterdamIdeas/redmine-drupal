@@ -1,0 +1,20 @@
+name = 'Redmine API'
+description = 'Provides a Drupal API to the <a href="http://www.redmine.org/projects/redmine/wiki/Rest_api">REST API</a> of <a href="http://www.redmine.org/">Redmine</a>, a project-management and issue-tracking web-application and open source software package.'
+package = 'Third party integration'
+core = 7.x
+version = "7.x-3.0-alpha1"
+
+; PHP version requirement (optional)
+; php = 5.2
+
+; Loadable code files
+; files[] = phpactiveresource/ActiveResource.php
+files[] = redmine.classes.inc
+files[] = redmine.module
+files[] = redmine.config.inc
+
+; Module dependencies
+dependencies[] = libraries
+
+; Configuration page
+; configure = admin/config/redmine

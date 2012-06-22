@@ -1,0 +1,12 @@
+name = Redmine usernames
+description = Provides a mechanism for storing Redmine user IDs and passwords
+core = 7.x
+package = Features
+version = 7.x-3.0-beta1
+project = redmine_usernames
+dependencies[] = features
+dependencies[] = field_sql_storage
+dependencies[] = text
+features[features_api][] = api:1
+features[field][] = user-user-field_redmine_password
+features[field][] = user-user-field_redmine_username

@@ -1,0 +1,701 @@
+<?php
+/**
+ * @file
+ * Provides an API to Redmine, a project tracking system.
+ */
+libraries_load('phpactiveresource');
+require_once ('redmine.classes.inc');
+
+function redmine_libraries_info() {
+  $libraries['phpactiveresource'] = array(
+    'name' => 'PHP ActiveResource',
+    'vendor url' => 'https://github.com/lux/phpactiveresource',
+    'download url' => 'https://github.com/lux/phpactiveresource',
+    'version arguments' => array(
+      'file' => 'ActiveResource.php',
+      // Best practice: Document the actual version strings for later reference.
+      // 1.x: Version 1.0
+      'pattern' => '/@version (\d+\.\d+)/',
+      'lines' => 50,
+    ),
+    'files' => array(
+      'php' => array('ActiveResource.php'),
+    ),
+  );
+
+/*
+  $files = array(
+    'php' => array('ActiveResource.php'),
+  );
+  $libraries['phpactiveresource']['integration files']['redmine'] = $files;
+*/
+  return $libraries;
+}
+
+/**
+ * REST API consumption functions.
+ */
+
+/**
+ * ISSUE FUNCTIONS.
+ *
+ * @see http://www.redmine.org/projects/redmine/wiki/Rest_Issues
+ */
+
+/**
+ * Retrieve an array of Redmine issues.
+ *
+ * @param $parameters
+ *    Parameters can be used to specify the number of
+ *    items to return, an offset, a column to sort by, and various
+ *    optional filters. Available parameters include:.
+ *       offset: skip this number of issues in response (optional)
+ *       limit: number of issues per page (optional)
+ *       sort: column to sort with. Append :desc to invert the order.
+ *       use this for "stable 1.0 branch" (instead of "offset" and "limit"):
+ *       page: page number (optional)
+ *
+ * Optional filters:
+ *       project_id: get issues from the project with the given id, 
+ *             where id is either project id or project identifier
+ *       tracker_id: get issues from the tracker with the given id
+ *       status_id: get issues with the given status id only. 
+ *              Possible values: open, closed, * to get open and closed issues, status id
+ *       assigned_to_id: get issues which are assigned to the given user id
+ *       cf_x: get issues with the given value for custom field with an ID of x.
+ *              (Custom field must have 'used as a filter' checked.)
+ *
+ * @return
+ *   An array of objects of type RedmineIssue.
+ */
+function redmine_rest_api_issues($parameters = array()) {
+  $getter = new RedmineIssue();
+  // find issues
+  $issues = $getter->find('all', $parameters);
+  return $issues;
+}
+
+/**
+ * Load a Redmine issue.
+ *
+ * @param $issue_id
+ *    The numerical ID of the issue to be loaded.
+ * @param $include
+ *    An array of the extra information to be included
+ *    when loading the issue. Possible values:
+ *      children
+ *      attachments
+ *      relations
+ *      changesets
+ *      journals
+ *
+ * @return
+ *   An object of type RedmineIssue.
+ */
+function redmine_rest_api_issue_load($issue_id, $include = NULL) {
+  $getter = new RedmineIssue();
+  if ($include) {
+    if (is_array($include)) {
+      $include = implode(',', $include);
+    }
+    $issue = $getter->find($issue_id, array(
+      'include' => $include,
+    ));
+  }
+  else {
+    $issue = $getter->find($issue_id);
+  }
+  return $issue;
+}
+
+/**
+ * Save an issue.
+ *
+ * @param $issue
+ *    An object of type RedmineIssue
+ */
+function redmine_rest_api_issue_save(&$issue) {
+  $issue->save();
+  $issue = redmine_rest_api_issue_load($issue->id);
+}
+
+/**
+ * Create and save an issue.
+ *
+ * @param $values
+ *    An associative array containing the project_id, subject
+ *    and other values to be added.
+ *      Required values:
+ *        project_id
+ *        subject
+ *      Other available values:
+ *        description
+ *        category_id
+ *        assigned_to_id
+ *        status_id
+ *        tracker_id
+ *        priority_id
+ *        parent_issue_id
+ *        start_date (example: 2012-06-16)
+ *        due_date (example: 2012-06-16)
+ *        done_ratio (an integer representing the % done; choices are 0, 10, 20, ... 100)
+ *        estimated_hours
+ *        custom_field_values
+ *    Available values are all scalars except custom_field_values,
+ *    which is an array with numeric keys corresponding to the
+ *    numerical ID of each custom field value. Example:
+ *        custom_field_values => array( 1 => "some text", 2 => "some other value")
+ *
+ * @return
+ *   An object of type RedmineIssue.
+ */
+function redmine_rest_api_issue_create($values=array()) {
+  $issue = new RedmineIssue($values);
+  $issue->save();
+  return $issue;
+}
+
+/**
+ * Update and save changes to an issue.
+ *
+ * @param $issue
+ *    An object of type RedmineIssue
+ * @param $values
+ *    An associative array containing the values to
+ *    be set. Available values include all the values
+ *    available to redmine_rest_api_issue_create, plus:
+ *      notes
+ */
+function redmine_rest_api_issue_update(&$issue, $values=array()) {
+  $issue->set($values)->save();
+  $issue = redmine_rest_api_issue_load($issue->id);
+}
+
+/**
+ * Delete an issue.
+ *
+ * @param $issue_id
+ *    An issue's numerical ID
+ */
+function redmine_rest_api_issue_delete($issue_id) {
+  $getter = new RedmineIssue();
+  $issue = $getter->find($issue_id);
+  $issue->destroy();
+}
+
+
+
+/**
+ * Project functions.
+ *
+ * @see http://www.redmine.org/projects/redmine/wiki/Rest_Projects
+ */
+
+ /**
+  * Retrieve an array of Redmine projects.
+  *
+  * @return
+  *   An array of objects of type RedmineIssue.
+  */
+function redmine_rest_api_projects() {
+  $getter = new RedmineProject();
+  // find projects
+  $projects = $getter->find('all');
+  return $projects;
+}
+
+/**
+ * Load a Redmine project.
+ *
+ * @param $project_id
+ *    The numerical ID or identifier string of the project to be loaded.
+ * @param $include
+ *    An array of the extra information to be included
+ *    when loading the project. Possible values:
+ *      trackers
+ *      issue_categories
+ *
+ * @return
+ *   An object of type RedmineProject.
+ */
+function redmine_rest_api_project_load($project_id, $include = NULL) {
+  $getter = new RedmineProject();
+  if ($include) {
+    if (is_array($include)) {
+      $include = implode(',', $include);
+    }
+    $project = $getter->find($project_id, array(
+      'include' => $include,
+    ));
+  }
+  else {
+    $project = $getter->find($project_id);
+  }
+  return $project;
+}
+
+/**
+ * Save a project.
+ *
+ * @param $project
+ *    An object of type RedmineProject
+ */
+function redmine_rest_api_project_save(&$project) {
+  $project->save();
+  $project = redmine_rest_api_project_load($project->id, array('trackers', 'issue_categories'));
+}
+
+/**
+ * Create and save a project.
+ *
+ * @param $values
+ *    An associative array containing the project name,
+ *    identifier and description.
+ *      Required values:
+ *        name
+ *        identifier
+ *      Other available values:
+ *        description
+ *
+ * @return
+ *   An object of type RedmineProject.
+ */
+function redmine_rest_api_project_create($values=array()) {
+  $project = new RedmineProject($values);
+  $project->save();
+  return $project;
+}
+
+/**
+ * Update and save changes to a project.
+ *
+ * @param $project
+ *    An object of type RedmineProject
+ * @param $values
+ *    An associative array containing the values to
+ *    be set. Available values include name and description.
+ */
+function redmine_rest_api_project_update(&$project, $values=array()) {
+  $project->set($values)->save();
+  $project = redmine_rest_api_project_load($project->id, array('trackers', 'issue_categories'));
+}
+
+/**
+ * Delete a project.
+ *
+ * @param $project_id
+ *    A project's numerical ID or identifier string
+ */
+function redmine_rest_api_project_delete($project_id) {
+  $getter = new RedmineProject();
+  $project = $getter->find($project_id);
+  $project->destroy();
+}
+
+/**
+ * Project membership functions.
+ *
+ * @see http://www.redmine.org/projects/redmine/wiki/Rest_Memberships
+ */
+
+ /**
+  * Retrieve an array of members of a Redmine project.
+  *
+  * @param $project
+  *    An object of type RedmineProject
+  * @return
+  *   An array of objects of type RedmineProjectMembership.
+  */
+function redmine_rest_api_memberships($project) {
+  return $project->memberships();
+}
+
+/**
+ * Load a Redmine project membership.
+ *
+ * @param $membership_id
+ *    The numerical ID of the membership to be loaded.
+ *
+ * @return
+ *   An object of type RedmineProjectMembership.
+ */
+function redmine_rest_api_membership_load($membership_id) {
+  $getter = new RedmineProjectMembership();
+  $membership = $getter->find($membership_id);
+  return $membership;
+}
+
+/**
+ * Save a membership.
+ *
+ * @param $membership
+ *    An object of type RedmineProjectMembership
+ */
+function redmine_rest_api_membership_save(&$membership) {
+  $membership->save();
+  $membership = redmine_rest_api_membership_load($membership->id);
+}
+
+/**
+ * Add a user as member of a project.
+ *
+ * @param $project
+ *    An object of type RedmineProject
+ * @param $user_id
+ *    The numerical ID of a user
+ * @param $roles
+ *    A simple array of numerical role IDs.
+ */
+function redmine_rest_api_membership_create($project, $user_id, $roles=array()) {
+  return $project->add_membership($user_id, $roles);
+}
+
+/**
+ * Updates the roles for a particular membership
+ *
+ * @param $membership
+ *    An object of type RedmineProjectMembership
+ * @param $roles
+ *   A simple array of numerical user role IDs to be assigned to this membership.
+ */
+function redmine_rest_api_membership_update(&$membership, $roles) { 
+  $membership->update($roles);
+  $membership = redmine_rest_api_membership_load($membership->id);
+}
+
+/**
+ * Delete a project membersahip.
+ *
+ * @param $membership_id
+ *    A membership's numerical ID or identifier string
+ */
+function redmine_rest_api_membership_delete($membership_id) {
+  $getter = new RedmineProjectMembership();
+  $membership = $getter->find($membership_id);
+  $membership->destroy();
+}
+
+
+/**
+ * User functions.
+ *
+ * @see http://www.redmine.org/projects/redmine/wiki/Rest_Users
+ */
+
+ /**
+  * Retrieve an array of users.
+  *
+  * @return
+  *   An array of objects of type RedmineUser.
+  */
+function redmine_rest_api_users() {
+  $getter = new RedmineUser();
+  // find issues
+  $users = $getter->find('all');
+  return $users;
+}
+
+/**
+ * Load a Redmine user.
+ *
+ * @param $user_id
+ *    The numerical ID of the user to be loaded.
+ * @param $include
+ *    An array of the extra information to be included
+ *    when loading the issue. Possible values:
+ *      memberships
+ *      groups
+ *
+ * @return
+ *   An object of type RedmineIssue.
+ */
+function redmine_rest_api_user_load($user_id, $include=NULL) {
+  $getter = new RedmineUser();
+  if ($include) {
+    if (is_array($include)) {
+      $include = implode(',', $include);
+    }
+    $user = $getter->find($user_id, array(
+      'include' => $include,
+    ));
+  }
+  else {
+    $user = $getter->find($user_id);
+  }
+  return $user;
+}
+
+/**
+ * Save a user.
+ *
+ * @param $user
+ *    An object of type RedmineUser
+ */
+function redmine_rest_api_user_save(&$user) {
+  $user->save();
+  $user = redmine_rest_api_user_load($user->id, array('memberships', 'groups'));
+}
+
+/**
+ * Create and save a user.
+ *
+ * @param $values
+ *    An associative array containing the project_id, subject
+ *    and other values to be added.
+ *      Required values:
+ *        login
+ *        password
+ *        firstname
+ *        lastname
+ *        mail
+ *      Other available values:
+ *        auth_source_id
+ *
+ * @return
+ *   An object of type RedmineUser.
+ */
+function redmine_rest_api_user_create($values=array()) {
+  $user = new RedmineUser($values);
+  $user->save();
+  return $user;
+}
+
+/**
+ * Update and save changes to a user.
+ *
+ * @param $user
+ *    An object of type RedmineUser
+ * @param $values
+ *    An associative array containing the values to
+ *    be set. Takes the same values as redmine_rest_api_user_create().
+ */
+function redmine_rest_api_user_update(&$user, $values=array()) {
+  $user->set($values)->save();
+  $user = redmine_rest_api_user_load($user->id, array('memberships', 'groups'));
+}
+// Deleting users is not supported by Redmine.
+
+/**
+ * TIME ENTRY FUNCTIONS.
+ *
+ * @see http://www.redmine.org/projects/redmine/wiki/Rest_TimeEntries
+ */
+
+/**
+ * Retrieve an array of Redmine time entries.
+ *
+  * @return
+ *   An array of objects of type RedmineTimeEntry.
+ */
+function redmine_rest_api_time_entries() {
+  $getter = new RedmineTimeEntry();
+  // find time entries
+  $time_entries = $getter->find('all');
+  return $time_entries;
+}
+
+/**
+ * Load a Redmine time entry.
+ *
+ * @param $time_entry_id
+ *    The numerical ID of the time entry to be loaded.
+ *
+ * @return
+ *   An object of type RedmineTimeEntry.
+ */
+function redmine_rest_api_time_entry_load($time_entry_id) {
+  $getter = new RedmineTimeEntry();
+  $time_entry = $getter->find($time_entry_id);
+  return $time_entry;
+}
+
+/**
+ * Save a time entry.
+ *
+ * @param $time entry
+ *    An object of type RedmineTimeEntry
+ */
+function redmine_rest_api_time_entry_save(&$time_entry) {
+  $time_entry->save();
+  $time_entry = redmine_rest_api_time_entry_load($time_entry->id);
+}
+
+/**
+ * Create and save a time entry.
+ *
+ * @param $values
+ *    An associative array containing the project_id, subject
+ *    and other values to be added.
+ *      Required values:
+ *        issue_id or project_id (only one is required): the issue id or project id to log time on
+ *        hours (required): the number of spent hours
+ *        activity_id: the id of the time activity. This parameter is required
+ *                     unless a default activity is defined in Redmine.
+ *        comments: short description for the entry (255 characters max)
+ *      Other available values:
+ *        spent_on: the date the time was spent (default to the current date)
+ *
+ * @return
+ *   An object of type RedmineTimeEntry.
+ */
+function redmine_rest_api_time_entry_create($values=array()) {
+  $time_entry = new RedmineTimeEntry($values);
+  $time_entry->save();
+  return $time_entry;
+}
+
+/**
+ * Update and save changes to a time entry.
+ *
+ * @param $time_entry
+ *    An object of type RedmineTimeEntry
+ * @param $values
+ *    An associative array containing the values to
+ *    be set. Available values include all the values
+ *    available to redmine_rest_api_time_entry_create.
+ */
+function redmine_rest_api_time_entry_update(&$time_entry, $values=array()) {
+  $time_entry->set($values)->save();
+  $time_entry = redmine_rest_api_time_entry_load($time_entry->id);
+}
+
+/**
+ * Delete a time entry.
+ *
+ * @param $time_entry_id
+ *    A time entry's numerical ID
+ */
+function redmine_rest_api_time_entry_delete($time_entry_id) {
+  $getter = new RedmineTimeEntry();
+  $time_entry = $getter->find($time_entry_id);
+  $time_entry->destroy();
+}
+
+/**
+ * Retrieve an array of Redmine issue relations.
+ *
+ * @param $issue
+ *    An object of type RedmineIssue
+ * @return
+ *   An array of objects of type RedmineIssueRelation.
+ */
+function redmine_rest_api_issue_relations($issue) {
+  return $issue->relations();
+}
+
+/**
+ * Retrieve an array of Redmine versions.
+ *
+ * @return
+ *   An array of objects of type RedmineVersion.
+ */
+function redmine_rest_api_versions($project) {
+  return $project->versions();
+}
+
+/**
+ * Retrieve an array of Redmine queries.
+ *
+ * @return
+ *   An array of objects of type RedmineQuery.
+ */
+function redmine_rest_api_queries() {
+  $getter = new RedmineQuery();
+  $queries = $getter->find('all');
+  return $queries;
+}
+
+/**
+ * Retrieve an array of Redmine issue statuses.
+ *
+ * @return
+ *   An array of objects of type RedmineIssueStatus.
+ */
+function redmine_rest_api_issue_statuses() {
+  $getter = new RedmineIssueStatus();
+  $issue_statuses = $getter->find('all');
+  return $issue_statuses;
+}
+
+/**
+ * Retrieve an array of Redmine trackers.
+ *
+ * @return
+ *   An array of objects of type RedmineTracker.
+ */
+function redmine_rest_api_trackers() {
+  $getter = new RedmineTracker();
+  $trackers = $getter->find('all');
+  return $trackers;
+}
+
+/**
+ * Retrieve an array of Redmine issue categories for a project.
+ *
+ * @param $project
+ *    An object of type RedmineProject
+ * @return
+ *   An array of objects of type RedmineIssueCategory.
+ */
+function redmine_rest_api_issue_categories($project) {
+  return $project->issue_categories();
+}
+
+/**
+ * Retrieve an array of Redmine roles.
+ *
+ * @return
+ *   An array of objects of type RedmineRole.
+ */
+function redmine_rest_api_roles() {
+  $getter = new RedmineRole();
+  $role = $getter->find('all');
+  return $role;
+}
+
+/**
+ * Retrieve an array of Redmine groups.
+ *
+ * @return
+ *   An array of objects of type RedmineGroup.
+ */
+function redmine_rest_api_groups() {
+  $getter = new RedmineGroup();
+  $group = $getter->find('all');
+  return $group;
+}
+
+/**
+ * Returns the total count of items of a certain type, with optional parameters.
+ *
+ * Note that for $type of "issues", closed tickets are not included in the count,
+ * unless the wildcard "status_id" parameter is used.  E.g.
+ * @code
+ *  $count = redmine_api_count("issues", array('status_id' => '*'));
+ * @endcode
+ *
+ * @param $type String
+ *    A Redmine type as per redmine_rest_api_schemas().
+ * @param $parameters Array
+ *    Parameters to filter the items by.  See the Redmine REST API documentation.
+ *    @see http://www.redmine.org/projects/redmine/wiki/Rest_api
+ *    @see http://www.redmine.org/projects/redmine/wiki/Rest_Issues
+ * @return Integer or NULL
+ *    The total count of items of type $type meeting the criteria defined by
+ *    $parameters.  Or NULL on error.
+ */
+function redmine_api_count($type, $parameters = array()) {
+  $counter = new RedmineResource();
+  return $counter->count_items($type, $parameters);
+}
+
+
+/*
+// These were in version 2.0 of the Redmine API module.
+// I don't know what they're for.
+function redmine_rest_api_issue_head($issue_id) {
+}
+function redmine_rest_api_project_head($project_id) {
+}
+*/
+

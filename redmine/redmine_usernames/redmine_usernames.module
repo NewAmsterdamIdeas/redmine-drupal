@@ -1,0 +1,17 @@
+<?php
+/**
+ * @file
+ */
+
+// Drupal needs this blank file.
+
+/**
+ * Implements hook_redmine_config
+ */
+function redmine_usernames_redmine_config_alter(&$config, &$site=NULL) {
+  global $user;
+  $user_data = user_load($user->uid);
+  $config->user = $user_data->field_redmine_username['und'][0]['value'];
+  $config->password = $user_data->field_redmine_password['und'][0]['value'];
+}
+
