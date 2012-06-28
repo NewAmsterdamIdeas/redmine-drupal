@@ -1,0 +1,103 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, and update functions for the Redmine module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function redmine_schema() {
+  $schema['redmine_server'] = array(
+    'description' => 'Stores information about available Redmine servers.',
+    'fields' => array(
+      'sid' => array(
+        'description' => 'Primary ID field for the table. Not used for anything except internal lookups.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'no export' => TRUE,
+      ),
+      'machine_name' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'default' => '',
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+        'not null' => TRUE,
+      ),
+      'url' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+        'not null' => TRUE,
+      ),
+      'global_api_key' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('sid'),
+    'unique keys' => array(
+      'machine_name' => array('machine_name'),
+      'url' => array('url'),
+    ),
+    'export' => array(
+      'key' => 'machine_name',
+      'key name' => 'Name',
+      'primary key' => 'sid',
+      'identifier' => 'server',
+      'default hook' => 'redmine_server_default',
+      'api' => array(
+        'owner' => 'redmine',
+        'api' => 'redmine_server',
+        'minimum_version' => 1,
+        'current_version' => 1,
+      ),
+      'cache defaults' => TRUE,
+      'default cache bin' => 'cache_redmine',
+    ),
+  );
+
+  $schema['cache_redmine'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_redmine']['description'] = 'Cache table to store the results of cacheable Redmine API requests.';
+  return $schema;
+}
+
+/**
+ * Implements hook_field_schema().
+ */
+function redmine_field_schema() {
+  $schema['columns']['value'] = array(
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => FALSE,
+  );
+  $schema['columns']['server'] = array(
+    'type' => 'varchar',
+    'length' => 128,
+    'not null' => FALSE,
+  );
+  $schema['foreign keys']['redmine_server'] = array(
+    'table' => 'redmine_server',
+    'columns' => array('server' => 'machine_name'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function redmine_uninstall() {
+  variable_del('redmine_bot_issue_message');
+  variable_del('redmine_cache_requests');
+  variable_del('redmine_cache_expire');
+}

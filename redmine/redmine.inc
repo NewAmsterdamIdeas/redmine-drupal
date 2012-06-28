@@ -1,11 +1,74 @@
 <?php
 require_once ('redmine.config.inc');
 
-class RedmineResource extends ActiveResource {
+class RedmineActiveResource extends ActiveResource {
+  /**
+   * Fetch the specified request via drupal_http_request() if cURL is not enabled.
+   */
+  function _fetch ($url, $method, $params) {
+    if (extension_loaded('curl')) {
+      return parent::_fetch($url, $method, $params);
+    }
+
+    $options['headers'] = array();
+
+    if ($this->request_format == 'xml') {
+      $options['headers']['Content-Type'] = 'text/xml';
+      $options['headers']['Length'] = strlen($params);
+    }
+    switch ($method) {
+      case 'POST':
+      case 'PUT':
+        $options['method'] = $method;
+        $options['data'] = $params;
+          break;
+      case 'DELETE':
+        $options['method'] = 'DELETE';
+        break;
+      case 'GET':
+      default:
+        break;
+    }
+
+    $request = drupal_http_request($url, $options);
+
+    if (!empty($request->error)) {
+      $this->errno = $request->code;
+      $this->error = $request->error;
+    }
+
+    if ($request->code == 401) {
+      $this->errno = 401;
+//OOPS
+//      $this->error = $
+    }
+
+    $res = new stdClass();
+//OOPS
+//    $res->
+
+      // Check HTTP status code for denied access
+      $http_code = curl_getinfo ($ch, CURLINFO_HTTP_CODE);
+      if ($http_code == 401) {
+          $this->errno = $http_code;
+          $this->error = "HTTP Basic: Access denied.";
+          curl_close ($ch);
+          return false;
+      }
+
+      if (! $res) {
+          $this->errno = curl_errno ($ch);
+          $this->error = curl_error ($ch);
+          curl_close ($ch);
+          return false;
+      }
+      curl_close ($ch);
+      return $res;
+  }
   function __construct ($data = array ()) {
     parent::__construct($data);
     $config = new RedmineAPIConfig();
-    $this->site = $config->site(); //$matches[1] . $redmine_username . ':' . $redmine_password . '@' . $matches[2];
+    $this->site = $config->site();
     $this->request_format = 'xml';
   }
 
@@ -185,42 +248,6 @@ class RedmineResource extends ActiveResource {
     return $entities;
   }
 
-  /**
-   * Factory method used to create Redmine objects.
-   *
-   * @param $type
-   *   The key of the request type.
-   */
-  static function factory($type) {
-    switch ($type) {
-      case 'issues':
-        return new RedmineIssue();
-      case 'projects':
-        return new RedmineProject();
-      case 'memberships':
-        return new RedmineProjectMembership();
-      case 'users':
-        return new RedmineUser();
-      case 'time_entries':
-        return new RedmineTimeEntry();
-      case 'relations':
-        return new RedmineIssueRelation();
-      case 'versions':
-        return new RedmineProjectVersion();
-      case 'queries':
-        return new RedmineQuery();
-      case 'attachments':
-        return new RedmineAttachment();
-      case 'issue_statuses':
-        return new RedmineIssueStatus();
-      case 'trackers':
-        return new RedmineTracker();
-      case 'issue_categories':
-        return new RedmineIssueCategory();
-      case 'roles':
-        return new RedmineRole();
-    }
-  }
 }
 
 /**
@@ -247,7 +274,7 @@ class RedmineResource extends ActiveResource {
  *   cf_x: get issues with the given value for custom field with an ID of x. (Custom field must have 'used as a filter' checked.)
  */
 // TODO: implement changesets handling
-class RedmineIssue extends RedmineResource {
+class RedmineIssue extends RedmineActiveResource {
   
   var $element_name = 'issue';
   
@@ -284,11 +311,7 @@ class RedmineIssue extends RedmineResource {
   }
 }
 
-class RedmineIssueJournal extends RedmineResource {
-  var $element_name = 'journal';
-}
-
-class RedmineProject extends RedmineResource {
+class RedmineProject extends RedmineActiveResource {
   var $element_name = 'project';
 
   function data() {
@@ -370,7 +393,7 @@ class RedmineProject extends RedmineResource {
   }
 }
 
-class RedmineProjectMembership extends RedmineResource {
+class RedmineProjectMembership extends RedmineActiveResource {
   var $element_name = 'membership';
   
   /**
@@ -407,7 +430,7 @@ class RedmineProjectMembership extends RedmineResource {
   }
 }
 
-class RedmineUser extends RedmineResource {
+class RedmineUser extends RedmineActiveResource {
   var $element_name = 'user';
   function data() {
     return parent::data(array(
@@ -424,7 +447,7 @@ class RedmineUser extends RedmineResource {
   }
 }
 
-class RedmineTimeEntry extends RedmineResource {
+class RedmineTimeEntry extends RedmineActiveResource {
   var $element_name = 'time_entry';
   function data() {
     return parent::data(array(
@@ -442,7 +465,7 @@ class RedmineTimeEntry extends RedmineResource {
   }
 }
 
-class RedmineIssueRelation extends RedmineResource {
+class RedmineIssueRelation extends RedmineActiveResource {
   var $element_name = 'relation';
     function data() {
       return parent::data(array(
@@ -455,7 +478,7 @@ class RedmineIssueRelation extends RedmineResource {
     }
 }
 
-class RedmineProjectVersion extends RedmineResource {
+class RedmineProjectVersion extends RedmineActiveResource {
   var $element_name = 'version';
   function data() {
     return parent::data(array(
@@ -470,7 +493,7 @@ class RedmineProjectVersion extends RedmineResource {
   }
 }
 
-class RedmineQuery extends RedmineResource {
+class RedmineQuery extends RedmineActiveResource {
   var $element_name = 'query';
   function data() {
     return parent::data(array(
@@ -482,11 +505,11 @@ class RedmineQuery extends RedmineResource {
   }
 }
 
-class RedmineAttachment extends RedmineResource {
+class RedmineAttachment extends RedmineActiveResource {
   var $element_name = 'attachment';
 }
 
-class RedmineIssueStatus extends RedmineResource {
+class RedmineIssueStatus extends RedmineActiveResource {
   var $element_name = 'issue_status';
   function data() {
     return parent::data(array(
@@ -498,7 +521,7 @@ class RedmineIssueStatus extends RedmineResource {
   }
 }
 
-class RedmineTracker extends RedmineResource {
+class RedmineTracker extends RedmineActiveResource {
   var $element_name = 'tracker';
   function data() {
     return parent::data(array(
@@ -508,7 +531,7 @@ class RedmineTracker extends RedmineResource {
   }
 }
 
-class RedmineIssueCategory extends RedmineResource {
+class RedmineIssueCategory extends RedmineActiveResource {
   var $element_name = 'issue_category';
   function data() {
     return parent::data(array(
@@ -520,7 +543,7 @@ class RedmineIssueCategory extends RedmineResource {
   }
 }
 
-class RedmineRole extends RedmineResource {
+class RedmineRole extends RedmineActiveResource {
   var $element_name = 'role';
   function data() {
     return parent::data(array(
@@ -538,7 +561,7 @@ class RedmineRole extends RedmineResource {
   }
 }
 
-class RedmineGroup extends RedmineResource {
+class RedmineGroup extends RedmineActiveResource {
   var $element_name = 'group';
 }
 

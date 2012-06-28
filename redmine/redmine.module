@@ -1,10 +1,16 @@
 <?php
+
 /**
  * @file
- * Provides an API to Redmine, a project tracking system.
+ * Provides an API for Redmine integration with Drupal.
  */
+
+// @todo Support multiple redmine servers that are exportable via CTools?
+
 libraries_load('phpactiveresource');
-require_once ('redmine.classes.inc');
+require_once ('redmine.inc');
+// Load field hooks
+require_once(dirname(__FILE__) . '/redmine.field.inc');
 
 function redmine_libraries_info() {
   $libraries['phpactiveresource'] = array(
@@ -22,14 +28,219 @@ function redmine_libraries_info() {
       'php' => array('ActiveResource.php'),
     ),
   );
-
-/*
-  $files = array(
-    'php' => array('ActiveResource.php'),
-  );
-  $libraries['phpactiveresource']['integration files']['redmine'] = $files;
-*/
   return $libraries;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function redmine_permission() {
+  $info['administer redmine'] = array(
+    'title' => t('Administer Redmine settings'),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function redmine_menu() {
+  //$items['admin/config/services/redmine'] = array(
+  //  'title' => 'Redmine',
+  //  'description' => 'Configure available Redmine server and settings.',
+  //  'page callback' => 'redmine_server_list',
+  //  'access arguments' => array('administer redmine'),
+  //  'file' => 'redmine.admin.inc',
+  //);
+  //$items['admin/config/services/redmine/servers'] = array(
+  //  'title' => 'Servers',
+  //  'page callback' => 'drupal_get_form',
+  //  'page arguments' => array('redmine_settings_form'),
+  //  'access arguments' => array('administer redmine'),
+  //  'file' => 'redmine.admin.inc',
+  //  'type' => MENU_DEFAULT_LOCAL_TASK,
+  //  'weight' => -10,
+  //);
+  $items['admin/config/services/redmine/settings'] = array(
+    'title' => 'Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('redmine_settings_form'),
+    'access arguments' => array('administer redmine'),
+    'file' => 'redmine.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    //'weight' => 0,
+  );
+
+  return $items;
+}
+
+function redmine_menu_alter(&$items) {
+  $items['admin/config/services/redmine/list']['title'] = 'Servers';
+}
+
+/**
+* Implements hook_ctools_plugin_directory().
+*/
+function redmine_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' && $plugin == 'export_ui') {
+    return 'plugins/' . $plugin;
+  }
+}
+
+function redmine_server_load($name) {
+  ctools_include('export');
+  return ctools_export_crud_load('redmine_server', $name);
+}
+
+function redmine_server_load_all() {
+  ctools_include('export');
+  return ctools_export_crud_load_all('redmine_server');
+}
+
+function redmine_server_load_all_enabled() {
+  $servers = redmine_server_load_all();
+  foreach ($servers as $key => $server) {
+    if (!empty($server->disabled)) {
+      unset($servers[$key]);
+    }
+  }
+  return $servers;
+}
+
+function redmine_server_save($server) {
+  //$server->is_new = empty($server->sid);
+  //module_invoke_all('redmine_server_presave', $server);
+  ctools_include('export');
+  ctools_export_crud_save('redmine_server', $server);
+}
+
+function redmine_server_delete($name) {
+  if ($server = redmine_server_load($name)) {
+    ctools_include('export');
+    return ctools_export_crud_delete('redmine_server', $server);
+  }
+}
+
+function redmine_get_server_options() {
+  $options = &drupal_static(__FUNCTION__);
+  if (!isset($options)) {
+    $options = array();
+    foreach (redmine_server_load_all_enabled() as $server) {
+      $options[$server->machine_name] = $server->name;
+    }
+  }
+  return $options;
+}
+
+/**
+ * A wrapper for libraries_get_path() that defaults to sites/all/libraries.
+ *
+ * This is so we don't have a hard dependency on libraries module.
+ */
+function redmine_get_library_path($library) {
+  return module_exists('libraries') ? libraries_get_path($library) : 'sites/all/libraries/' . $library;
+}
+
+/**
+ * Implements hook_registry_files_alter().
+ */
+function redmine_registry_files_alter(&$files, $modules) {
+  $dir = redmine_get_library_path('redmine-php-sdk');
+  foreach (file_scan_directory($dir . '/src', '/\.php$/') as $file) {
+    $files[$file->uri] = array(
+      'module' => 'redmine',
+      'weight' => 0,
+    );
+  }
+}
+
+/**
+ * Get a Redmine resource or list of resources from a Redmine website.
+ *
+ * @param $type
+ *   The key of the request type.
+ * @param $id
+ *   The resource identifier. If none is provided, return a list of resources.
+ * @param $params
+ *   An optional array of parameters.
+ *
+ * @return
+ *   A resource or list of resources retrieved from Redmine.
+ */
+function redmine_get($type, $id=NULL, $params=NULL) {
+  $getter = redmine_make($type);
+  if ($id && $id != 'all') {
+    // If we're getting a single resource, the parameters are an include
+    // instruction and not a results filter.
+    if ($params) {
+      if (is_array($params)) {
+        $params = implode(',', $params);
+      }
+      $params = $getter->find($issue_id, array('include' => $include));
+    }
+  }
+  else {
+    $id = 'all';
+  }
+  if ($params) {
+    return $getter->find($id, $parameters);
+  }
+  else {
+    return $getter->find($id);
+  }
+}
+/**
+ * Create an empty Redmine object.
+ *
+ * @param $type
+ *   The key of the request type.
+ *
+ * @return
+ *   An empty object of the specified type.
+ */
+function redmine_make($type) {
+  switch ($type) {
+    case 'issues':
+    case 'issue':
+      return new RedmineIssue();
+    case 'projects':
+    case 'project':
+      return new RedmineProject();
+    case 'memberships':
+    case 'membership':
+      return new RedmineProjectMembership();
+    case 'users':
+    case 'user':
+      return new RedmineUser();
+    case 'time_entries':
+    case 'time_entry':
+      return new RedmineTimeEntry();
+    case 'relations':
+    case 'relation':
+      return new RedmineIssueRelation();
+    case 'versions':
+    case 'version':
+      return new RedmineProjectVersion();
+    case 'queries':
+    case 'query':
+      return new RedmineQuery();
+    case 'attachments':
+    case 'attachment':
+      return new RedmineAttachment();
+    case 'issue_statuses':
+    case 'issue_status':
+      return new RedmineIssueStatus();
+    case 'trackers':
+    case 'tracker':
+      return new RedmineTracker();
+    case 'issue_categories':
+    case 'issue_category':
+      return new RedmineIssueCategory();
+    case 'roles':
+    case 'role':
+      return new RedmineRole();
+  }
 }
 
 /**
@@ -69,10 +280,7 @@ function redmine_libraries_info() {
  *   An array of objects of type RedmineIssue.
  */
 function redmine_rest_api_issues($parameters = array()) {
-  $getter = new RedmineIssue();
-  // find issues
-  $issues = $getter->find('all', $parameters);
-  return $issues;
+  return redmine_get('issues', $parameters);
 }
 
 /**
@@ -93,19 +301,7 @@ function redmine_rest_api_issues($parameters = array()) {
  *   An object of type RedmineIssue.
  */
 function redmine_rest_api_issue_load($issue_id, $include = NULL) {
-  $getter = new RedmineIssue();
-  if ($include) {
-    if (is_array($include)) {
-      $include = implode(',', $include);
-    }
-    $issue = $getter->find($issue_id, array(
-      'include' => $include,
-    ));
-  }
-  else {
-    $issue = $getter->find($issue_id);
-  }
-  return $issue;
+  return redmine_get('issue', $issue_id, $include);
 }
 
 /**
@@ -182,8 +378,6 @@ function redmine_rest_api_issue_delete($issue_id) {
   $issue = $getter->find($issue_id);
   $issue->destroy();
 }
-
-
 
 /**
  * Project functions.
@@ -685,17 +879,6 @@ function redmine_rest_api_groups() {
  *    $parameters.  Or NULL on error.
  */
 function redmine_api_count($type, $parameters = array()) {
-  $counter = new RedmineResource();
+  $counter = new RedmineActiveResource();
   return $counter->count_items($type, $parameters);
 }
-
-
-/*
-// These were in version 2.0 of the Redmine API module.
-// I don't know what they're for.
-function redmine_rest_api_issue_head($issue_id) {
-}
-function redmine_rest_api_project_head($project_id) {
-}
-*/
-

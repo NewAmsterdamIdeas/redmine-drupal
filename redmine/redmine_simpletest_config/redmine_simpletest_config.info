@@ -1,0 +1,5 @@
+name = Redmine Simpletest Configuration
+description = Provides configuration settings to specify a Redmine instance for testing purposes
+core = 7.x
+package = Features
+version = 7.x-3.0-beta1

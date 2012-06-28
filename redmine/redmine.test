@@ -1,0 +1,48 @@
+<?php
+/**
+ * @file
+ * This file contains tests of the functionality of redmine,
+ */
+
+/**
+ * This class corresponds to a family of tests (called a test case).
+ * Complex modules will have several of these. Inside the same
+ * test case, all tests will have the same setup.
+ */
+
+class redmineTestCase extends DrupalWebTestCase {
+
+  /**
+   * Info for this test case.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('redmine functionality'),
+      'description' => t('Test the functionality of redmine'),
+      'group' => 'redmine',
+    );
+  }
+
+  /*
+   * Common setup for all tests within a test case.
+   */
+  public function setUp() {
+    // set up a new site with default core modules, redmine, and
+    // dependencies.
+    parent::setUp('redmine');
+    // create a new user with some permissions you need; then log in.
+    $admin = $this->drupalCreateUser(array('permission one', 'permission two'));
+    $this->drupalLogin($admin);
+  }
+
+  /*
+   * Test -- recognizable as such because it starts with 'test'. For every   
+   * test, Simpletest will create a completely new Drupal installation, run 
+   * the common setUp() function, and go through this code.
+   */
+  public function testMainTest() {
+    // your testing code goes here. Note that at this point
+    // setUp() has already been run so if, in the setUp() function,     
+    // you have logged in as a specific user, you are still logged in. 
+  }
+}

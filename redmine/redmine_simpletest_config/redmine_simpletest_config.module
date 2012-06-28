@@ -1,0 +1,23 @@
+<?php
+/**
+ * @file
+ */
+
+// Before running SimpleTest, edit this configuration file with
+// a URL, username and password that can connect to an instance
+// of Redmine for testing purposes. Warning: Please do NOT use
+// a Redmine instance with real data in it. When it runs, SimpleTest
+// will create, delete, list and retrieve projects, issues and other
+// information on the Redmine instance. This has the potential to
+// seriously hose the contents of a real Redmine website, so please
+// don't let that happen.
+
+/**
+ * Implements hook_redmine_config
+ */
+function redmine_usernames_redmine_config_alter(&$config, &$site=NULL) {
+  $config->url = 'http://www.test_redmine_instance.com/';
+  $config->user = 'username';
+  $config->password = 'password';
+}
+
